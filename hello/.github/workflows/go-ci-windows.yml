@@ -1,0 +1,25 @@
+name: Go CI on Windows
+
+on:
+  push:
+    branches:
+      - main # or your main development branch
+
+jobs:
+  build:
+    runs-on: windows-latest # Specify a Windows runner
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4 # Action to check out your repository code
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25' # Specify the Go version you want to use
+
+      - name: Build Go application
+        run: go build -o hello.exe main.go # Build the executable for Windows
+
+      - name: Run Go application
+        run: .\hello.exe # Execute the compiled application on Windows
