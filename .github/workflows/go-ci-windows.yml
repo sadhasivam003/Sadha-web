@@ -19,7 +19,7 @@ jobs:
           go-version: '1.25' # Specify the Go version you want to use
 
       - name: Build Go application
-        run: go build -o hello-world.exe main.go # Build the executable for Windows
+        run: cd hello && go build -o hello-world.exe main.go
 
       - name: Run Go application
-        run: .\hello-world.exe # Execute the compiled application on Windows
+        run: cd hello && .\hello-world.exe
