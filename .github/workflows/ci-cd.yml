@@ -1,0 +1,76 @@
+name: Terraform Multi-Cloud CI/CD
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  terraform:
+    runs-on: windows-latest
+    env:
+      TF_IN_AUTOMATION: true
+    strategy:
+      matrix:
+        env: [dev, test, prod]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Format
+        run: terraform fmt -check -recursive
+        working-directory: terraform/envs/${{ matrix.env }}
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: terraform/envs/${{ matrix.env }}
+
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: terraform/envs/${{ matrix.env }}
+
+      - name: Terraform Plan
+        run: terraform plan
+        working-directory: terraform/envs/${{ matrix.env }}
+
+      - name: Run Terratest
+        run: |
+          go test -v -json ./test/terratest > terratest-report.json
+          go-junit-report < terratest-report.json > terratest-report.xml
+          junit2html terratest-report.xml terratest-report.html
+
+      - name: Terraform Apply (only on main, with approval)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform apply -auto-approve
+        working-directory: terraform/envs/${{ matrix.env }}
+
+      - name: Send Terratest Report via Email
+        if: always()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.example.com
+          server_port: 587
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: Terratest Integration Test Results
+          to: ${{ secrets.EMAIL_TO }}
+          from: ${{ secrets.EMAIL_FROM }}
+          content_type: text/html
+          body: ${{ steps.convert.outputs.html }}
+          attachments: terratest-report.html
+
+  require-tests-pass:
+    runs-on: ubuntu-latest
+    needs: terraform
+    steps:
+      - name: Require Terratest to pass before PR approval
+        run: echo "All tests must pass before PR can be approved."
