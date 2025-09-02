@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terratest Automation: Multi-Cloud & Multi-Environment Strategy</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            overflow: hidden;
+        }
+
+        .presentation {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .slide {
+            width: 90%;
+            max-width: 1200px;
+            height: 80vh;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 60px;
+            display: none;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .slide.active {
+            display: block;
+            animation: slideIn 0.5s ease-in-out;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .slide-header {
+            border-bottom: 4px solid #667eea;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+        }
+
+        .slide-number {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            background: #667eea;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        h2 {
+            font-size: 2em;
+            color: #667eea;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        h3 {
+            font-size: 1.5em;
+            color: #34495e;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        h4 {
+            font-size: 1.2em;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-weight: 500;
+        }
+
+        .subtitle {
+            font-size: 1.2em;
+            color: #7f8c8d;
+            font-style: italic;
+            margin-bottom: 30px;
+        }
+
+        .content {
+            line-height: 1.6;
+            font-size: 1.1em;
+        }
+
+        .bullet-point {
+            margin: 15px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .bullet-point::before {
+            content: "▶";
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .metric-card {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 5px solid #667eea;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .metric-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .metric-label {
+            font-size: 0.9em;
+            color: #6c757d;
+            font-weight: 500;
+        }
+
+        .architecture-box {
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            white-space: pre-line;
+        }
+
+        .risk-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        .risk-table th,
+        .risk-table td {
+            border: 1px solid #dee2e6;
+            padding: 12px;
+            text-align: left;
+        }
+
+        .risk-table th {
+            background: #667eea;
+            color: white;
+            font-weight: 600;
+        }
+
+        .risk-table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+
+        .timeline {
+            position: relative;
+            margin: 30px 0;
+        }
+
+        .timeline-item {
+            background: white;
+            border: 2px solid #667eea;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 15px 0;
+            position: relative;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .timeline-item::before {
+            content: "";
+            position: absolute;
+            left: -10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 20px;
+            background: #667eea;
+            border-radius: 50%;
+        }
+
+        .controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            z-index: 1000;
+        }
+
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover {
+            background: #5a6fd8;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .progress-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 4px;
+            background: #667eea;
+            transition: width 0.3s ease;
+            z-index: 1000;
+        }
+
+        .highlight {
+            background: linear-gradient(120deg, #a8edea 0%, #fed6e3 100%);
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .success { color: #28a745; font-weight: bold; }
+        .warning { color: #ffc107; font-weight: bold; }
+        .danger { color: #dc3545; font-weight: bold; }
+        .info { color: #17a2b8; font-weight: bold; }
+
+        .cost-breakdown {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin: 20px 0;
+        }
+
+        .cost-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 5px solid #28a745;
+        }
+
+        @media (max-width: 768px) {
+            .slide {
+                width: 95%;
+                padding: 30px;
+                height: 85vh;
+            }
+            
+            h1 { font-size: 2em; }
+            h2 { font-size: 1.5em; }
+            
+            .metric-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .cost-breakdown {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="progress-bar" id="progressBar"></div>
+    
+    <div class="presentation">
+        <!-- Slide 1: Executive Summary -->
+        <div class="slide active">
+            <div class="slide-number">1/17</div>
+            <div class="slide-header">
+                <h1>Infrastructure Testing Automation Initiative</h1>
+                <p class="subtitle">Transforming Infrastructure Reliability Through Automated Testing</p>
+            </div>
+            <div class="content">
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <div class="metric-value">$425K</div>
+                        <div class="metric-label">Total Investment</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">4.5 FTE</div>
+                        <div class="metric-label">Peak Resource Need</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">3 Months</div>
+                        <div class="metric-label">Implementation Timeline</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 10: Competitive Advantage -->
+        <div class="slide">
+            <div class="slide-number">10/17</div>
+            <div class="slide-header">
+                <h1>Competitive Advantage</h1>
+                <p class="subtitle">Positioning for Industry Leadership</p>
+            </div>
+            <div class="content">
+                <h3>🎯 Market Positioning</h3>
+                <div class="bullet-point"><span class="highlight">First-mover advantage</span> in comprehensive multi-cloud testing</div>
+                <div class="bullet-point">Reduced time-to-market for new features and products</div>
+                <div class="bullet-point">Enhanced customer trust through reliability improvements</div>
+                <div class="bullet-point">Compliance readiness for enterprise customers</div>
+
+                <h3>💡 Technology Leadership</h3>
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <div class="metric-value">IaC</div>
+                        <div class="metric-label">Infrastructure as Code Maturity</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">DevOps</div>
+                        <div class="metric-label">Best Practices Implementation</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">Cloud-Native</div>
+                        <div class="metric-label">Architecture Optimization</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">Security-First</div>
+                        <div class="metric-label">Development Culture</div>
+                    </div>
+                </div>
+
+                <h3>👨‍💻 Team Benefits</h3>
+                <div class="bullet-point">Reduced operational toil and manual processes</div>
+                <div class="bullet-point">Focus on high-value innovation and development</div>
+                <div class="bullet-point">Improved work-life balance through automation</div>
+                <div class="bullet-point">Enhanced technical skills and career growth</div>
+
+                <div class="architecture-box">🏆 Industry Benchmarks:
+• Netflix: 99.99% uptime with multi-cloud resilience
+• Spotify: 10x deployment frequency with automation
+• Our Opportunity: Industry-leading infrastructure reliability</div>
+            </div>
+        </div>
+
+        <!-- Slide 11: Workflow Automation -->
+        <div class="slide">
+            <div class="slide-number">11/17</div>
+            <div class="slide-header">
+                <h1>GitHub Actions Pipeline</h1>
+                <p class="subtitle">Automated Workflow for Multi-Environment Testing</p>
+            </div>
+            <div class="content">
+                <h3>🔄 Trigger Conditions</h3>
+                <div class="bullet-point"><strong>Pull Request:</strong> Validate changes before merge</div>
+                <div class="bullet-point"><strong>Scheduled:</strong> Nightly regression testing</div>
+                <div class="bullet-point"><strong>Manual:</strong> On-demand testing for hotfixes</div>
+                <div class="bullet-point"><strong>Deployment:</strong> Post-deployment validation</div>
+
+                <h3>⚡ Pipeline Flow</h3>
+                <div class="architecture-box">PR Created → Security Scan → Dev Testing → Staging Validation → Prod Deployment
+     ↓              ↓            ↓             ↓                    ↓
+   2 min         5 min       15 min        20 min              30 min
+     ↓              ↓            ↓             ↓                    ↓
+  Pass/Fail    Pass/Fail   Pass/Fail    Pass/Fail           Pass/Fail
+                                ↓                                ↓
+                        Slack/Email Alert              Success Notification</div>
+
+                <h3>🔀 Parallel Testing Strategy</h3>
+                <div class="bullet-point">Cloud providers tested simultaneously for efficiency</div>
+                <div class="bullet-point">Environment-specific test suites with different configurations</div>
+                <div class="bullet-point">Resource isolation and automatic cleanup</div>
+                <div class="bullet-point">Consolidated reporting across all environments</div>
+
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <div class="metric-value">3 Clouds</div>
+                        <div class="metric-label">Parallel Testing</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">3 Environments</div>
+                        <div class="metric-label">Per Cloud Provider</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">9 Total</div>
+                        <div class="metric-label">Test Combinations</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 12: Notification System -->
+        <div class="slide">
+            <div class="slide-number">12/17</div>
+            <div class="slide-header">
+                <h1>Notification & Alerting System</h1>
+                <p class="subtitle">Real-Time Communication and Reporting</p>
+            </div>
+            <div class="content">
+                <h3>💬 Slack Integration</h3>
+                <div class="bullet-point">Immediate notifications for test failures and successes</div>
+                <div class="bullet-point">Rich formatted reports with detailed test summaries</div>
+                <div class="bullet-point">Team-specific channels (DevOps, Platform, SRE)</div>
+                <div class="bullet-point">Escalation paths for critical failures</div>
+
+                <h3>📧 Email Reporting</h3>
+                <div class="bullet-point">Executive dashboards sent weekly with high-level metrics</div>
+                <div class="bullet-point">Detailed failure reports for engineering teams</div>
+                <div class="bullet-point">Compliance audit reports for security team</div>
+                <div class="bullet-point">Cost optimization reports for finance team</div>
+
+                <h3>🚨 Alert Prioritization</h3>
+                <div class="architecture-box">🚨 CRITICAL: Production failures, security violations
+⚠️  WARNING: Staging issues, performance degradation  
+ℹ️  INFO: Development feedback, optimization suggestions
+✅ SUCCESS: Deployment confirmations, weekly summaries
+❌ FAILED: Test case failures with detailed logs
+⭐ SKIPPED: Tests not applicable to current environment</div>
+
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <div class="metric-value danger">< 2 min</div>
+                        <div class="metric-label">Critical Alert Response</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value warning">< 15 min</div>
+                        <div class="metric-label">Warning Notifications</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value success">Real-time</div>
+                        <div class="metric-label">Success Confirmations</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 13: Key Features -->
+        <div class="slide">
+            <div class="slide-number">13/17</div>
+            <div class="slide-header">
+                <h1>Key Features & Capabilities</h1>
+                <p class="subtitle">Comprehensive Testing Suite</p>
+            </div>
+            <div class="content">
+                <h3>🔒 Security & Compliance</h3>
+                <div class="bullet-point">Automated security scans with Checkov, tfsec</div>
+                <div class="bullet-point">Compliance validation against SOC2, PCI-DSS</div>
+                <div class="bullet-point">RBAC and IAM policy testing</div>
+                <div class="bullet-point">Encryption and network security verification</div>
+
+                <h3>🚀 Performance & Scalability</h3>
+                <div class="bullet-point">Load testing on deployed infrastructure</div>
+                <div class="bullet-point">Auto-scaling validation</div>
+                <div class="bullet-point">Resource limit testing</div>
+                <div class="bullet-point">Network performance benchmarks</div>
+
+                <h3>💰 Cost Optimization</h3>
+                <div class="bullet-point">Resource cost estimation with Infracost</div>
+                <div class="bullet-point">Unused resource detection</div>
+                <div class="bullet-point">Right-sizing recommendations</div>
+                <div class="bullet-point">Budget threshold alerts</div>
+
+                <h3>📊 Monitoring & Observability</h3>
+                <div class="bullet-point">Health check validation</div>
+                <div class="bullet-point">Monitoring stack deployment testing</div>
+                <div class="bullet-point">Log aggregation verification</div>
+                <div class="bullet-point">Alert system testing</div>
+            </div>
+        </div>
+
+        <!-- Slide 14: Sample Test Results -->
+        <div class="slide">
+            <div class="slide-number">14/17</div>
+            <div class="slide-header">
+                <h1>Sample Test Results</h1>
+                <p class="subtitle">Real-World Testing Output Examples</p>
+            </div>
+            <div class="content">
+                <h3>✅ Successful Test Run Example</h3>
+                <div class="architecture-box">=== Terratest Results Summary ===
+Cloud Provider: AWS
+Environment: Production
+Timestamp: 2024-03-15 14:30:00 UTC
+
+✅ PASSED: VPC Configuration (2.3s)
+✅ PASSED: Security Group Rules (1.8s)  
+✅ PASSED: EC2 Instance Deployment (45.2s)
+✅ PASSED: RDS Database Connectivity (23.7s)
+✅ PASSED: S3 Bucket Encryption (3.1s)
+✅ PASSED: EKS Cluster Health Check (67.4s)
+
+Total Tests: 6
+Passed: 6 ✅
+Failed: 0 ❌
+Success Rate: 100%
+Total Duration: 2m 23s
+
+Security Scan: ✅ PASSED (No violations found)
+Cost Estimate: $1,247/month (within budget)</div>
+
+                <h3>🚨 Slack Notification Example</h3>
+                <div class="architecture-box">🚨 Terratest Alert - FAILED
+
+Repository: company/infrastructure
+Environment: staging-gcp
+Branch: feature/new-monitoring
+
+❌ Failed Tests:
+  • TestGKECluster: timeout waiting for cluster ready (15m 30s)
+  • TestCloudSQL: connection refused on port 5432 (2m 15s)
+
+✅ Passed Tests: 8
+❌ Failed Tests: 2
+Success Rate: 80%
+
+🔗 View Details: https://github.com/company/infrastructure/actions/runs/123456</div>
+            </div>
+        </div>
+
+        <!-- Slide 15: Cost Analysis -->
+        <div class="slide">
+            <div class="slide-number">15/17</div>
+            <div class="slide-header">
+                <h1>Detailed Cost Analysis</h1>
+                <p class="subtitle">Cloud Testing Resources & Operational Costs</p>
+            </div>
+            <div class="content">
+                <h3>☁️ Monthly Cloud Testing Resources</h3>
+                <div class="cost-breakdown">
+                    <div class="cost-section">
+                        <h4>AWS Testing Resources</h4>
+                        <div class="bullet-point">EC2 instances (t3.medium × 10): <span class="info">$500</span></div>
+                        <div class="bullet-point">RDS testing databases: <span class="info">$400</span></div>
+                        <div class="bullet-point">S3 storage and transfers: <span class="info">$100</span></div>
+                        <div class="bullet-point">EKS cluster time: <span class="info">$300</span></div>
+                        <div class="bullet-point">Lambda execution costs: <span class="info">$50</span></div>
+                        <div style="border-top: 2px solid #667eea; margin-top: 10px; padding-top: 10px;">
+                            <strong>Total AWS: <span class="highlight">$1,350/month</span></strong>
+                        </div>
+                    </div>
+                    
+                    <div class="cost-section">
+                        <h4>GCP + Azure Testing Resources</h4>
+                        <div class="bullet-point">GCP Total: <span class="info">$1,225/month</span></div>
+                        <div class="bullet-point">Azure Total: <span class="info">$1,305/month</span></div>
+                        <div style="border-top: 2px solid #667eea; margin-top: 10px; padding-top: 10px;">
+                            <strong>Combined: <span class="highlight">$2,530/month</span></strong>
+                        </div>
+                    </div>
+                </div>
+
+                <h3>🛠️ Annual Tool and Service Costs</h3>
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <div class="metric-value">$46,560</div>
+                        <div class="metric-label">Annual Cloud Testing</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">$75,600</div>
+                        <div class="metric-label">Tools & Services</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">$122,160</div>
+                        <div class="metric-label">Total Annual Operating</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value success">950%</div>
+                        <div class="metric-label">Net ROI</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 16: Next Steps -->
+        <div class="slide">
+            <div class="slide-number">16/17</div>
+            <div class="slide-header">
+                <h1>Next Steps & Decision Points</h1>
+                <p class="subtitle">Immediate Actions Required</p>
+            </div>
+            <div class="content">
+                <h3>🎯 Leadership Approval Needed</h3>
+                <div class="timeline">
+                    <div class="timeline-item">
+                        <h4>Budget Authorization</h4>
+                        <p><span class="highlight">$425K</span> for 3-month implementation</p>
+                    </div>
+                    <div class="timeline-item">
+                        <h4>Resource Allocation</h4>
+                        <p><span class="highlight">4.5 FTE</span> for project duration</p>
+                    </div>
+                    <div class="timeline-item">
+                        <h4>Strategic Priority</h4>
+                        <p>Executive sponsorship and support</p>
+                    </div>
+                    <div class="timeline-item">
+                        <h4>Timeline Commitment</h4>
+                        <p><span class="highlight">Q1 2024</span> completion target</p>
+                    </div>
+                </div>
+
+                <h3>🔧 Technical Preparation</h3>
+                <div class="bullet-point">Cloud Provider Accounts: Ensure testing access across all providers</div>
+                <div class="bullet-point">Security Review: Approve automated testing security model</div>
+                <div class="bullet-point">Compliance Alignment: Validate approach with legal/compliance teams</div>
+                <div class="bullet-point">Tool Procurement: GitHub Actions enterprise licensing</div>
+
+                <h3>📅 Decision Timeline</h3>
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <div class="metric-value">Week 1</div>
+                        <div class="metric-label">Leadership Approval</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">Week 2</div>
+                        <div class="metric-label">Team Formation</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">Week 3</div>
+                        <div class="metric-label">Phase 1 Kickoff</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 17: Q&A -->
+        <div class="slide">
+            <div class="slide-number">17/17</div>
+            <div class="slide-header">
+                <h1>Questions & Discussion</h1>
+                <p class="subtitle">Key Discussion Points</p>
+            </div>
+            <div class="content">
+                <h3>🎯 Strategic Questions</h3>
+                <div class="bullet-point">How does this align with our cloud-first strategy?</div>
+                <div class="bullet-point">Is the 3-month timeline acceptable for business needs?</div>
+                <div class="bullet-point">Can we allocate the required engineering resources?</div>
+                <div class="bullet-point">How will this integrate with existing CI/CD pipelines?</div>
+
+                <h3>🔒 Technical Considerations</h3>
+                <div class="bullet-point">What are the security implications of automated cloud testing?</div>
+                <div class="bullet-point">How will this support our compliance requirements?</div>
+                <div class="bullet-point">Can this solution grow with our infrastructure needs?</div>
+                <div class="bullet-point">What's the long-term maintenance and support model?</div>
+
+                <h3>💼 Business Impact</h3>
+                <div class="bullet-point">Are the projected savings realistic and achievable?</div>
+                <div class="bullet-point">What are the risks if we don't implement this solution?</div>
+                <div class="bullet-point">How will this position us competitively?</div>
+                <div class="bullet-point">How will this improve customer experience?</div>
+
+                <div class="architecture-box">Thank you for your attention!
+
+Ready to transform our infrastructure reliability and 
+achieve industry-leading operational excellence.
+
+Let's discuss how we can move forward together.</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="btn" id="prevBtn" onclick="changeSlide(-1)">← Previous</button>
+        <button class="btn" id="nextBtn" onclick="changeSlide(1)">Next →</button>
+    </div>
+
+    <script>
+        let currentSlide = 0;
+        const slides = document.querySelectorAll('.slide');
+        const totalSlides = slides.length;
+
+        function updateProgressBar() {
+            const progress = ((currentSlide + 1) / totalSlides) * 100;
+            document.getElementById('progressBar').style.width = progress + '%';
+        }
+
+        function showSlide(n) {
+            slides.forEach(slide => slide.classList.remove('active'));
+            
+            if (n >= totalSlides) currentSlide = 0;
+            if (n < 0) currentSlide = totalSlides - 1;
+            
+            slides[currentSlide].classList.add('active');
+            
+            // Update button states
+            document.getElementById('prevBtn').disabled = currentSlide === 0;
+            document.getElementById('nextBtn').disabled = currentSlide === totalSlides - 1;
+            
+            updateProgressBar();
+        }
+
+        function changeSlide(n) {
+            currentSlide += n;
+            showSlide(currentSlide);
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowLeft') changeSlide(-1);
+            if (e.key === 'ArrowRight') changeSlide(1);
+            if (e.key === 'Home') {
+                currentSlide = 0;
+                showSlide(currentSlide);
+            }
+            if (e.key === 'End') {
+                currentSlide = totalSlides - 1;
+                showSlide(currentSlide);
+            }
+        });
+
+        // Touch/swipe support for mobile
+        let touchStartX = 0;
+        let touchEndX = 0;
+
+        document.addEventListener('touchstart', e => {
+            touchStartX = e.changedTouches[0].screenX;
+        });
+
+        document.addEventListener('touchend', e => {
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipe();
+        });
+
+        function handleSwipe() {
+            const swipeThreshold = 50;
+            const diff = touchStartX - touchEndX;
+            
+            if (Math.abs(diff) > swipeThreshold) {
+                if (diff > 0) changeSlide(1);  // Swipe left - next slide
+                else changeSlide(-1);          // Swipe right - previous slide
+            }
+        }
+
+        // Auto-advance slides (optional - uncomment to enable)
+        // setInterval(() => {
+        //     if (currentSlide < totalSlides - 1) {
+        //         changeSlide(1);
+        //     }
+        // }, 30000); // 30 seconds per slide
+
+        // Initialize
+        showSlide(0);
+        updateProgressBar();
+    </script>
+</body>
+</html>-grid">
+                    <div class="metric-card">
+                        <div class="metric-value">99.9%</div>
+                        <div class="metric-label">Infrastructure Reliability</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">75%</div>
+                        <div class="metric-label">Faster Deployments</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">Zero</div>
+                        <div class="metric-label">Production Incidents</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">3 Weeks</div>
+                        <div class="metric-label">Timeline for Demo</div>
+                    </div>
+                </div>
+                
+                <h3>Key Objectives:</h3>
+                <div class="bullet-point">Implement comprehensive infrastructure testing across multiple cloud providers</div>
+                <div class="bullet-point">Leverage Terratest + GitHub Actions + Multi-cloud deployment</div>
+                <div class="bullet-point">Achieve industry-leading infrastructure reliability and operational efficiency</div>
+                <div class="bullet-point">Establish automated validation processes for all environments</div>
+            </div>
+        </div>
+
+        <!-- Slide 2: Current Challenges -->
+        <div class="slide">
+            <div class="slide-number">2/17</div>
+            <div class="slide-header">
+                <h1>Current State Challenges</h1>
+                <p class="subtitle">Infrastructure Pain Points Impacting Business Performance</p>
+            </div>
+            <div class="content">
+                <h3>🔧 Manual Testing Burden</h3>
+                <div class="bullet-point">Multiple hours per week of manual infrastructure validation</div>
+                <div class="bullet-point"><span class="danger">15% of deployments</span> affected by human error in configuration changes</div>
+                <div class="bullet-point">Inconsistent testing approaches across environments</div>
+
+                <h3>☁️ Multi-Cloud Complexity</h3>
+                <div class="bullet-point">AWS, GCP, Azure - different testing approaches and toolsets</div>
+                <div class="bullet-point">Environment drift between dev/staging/production environments</div>
+                <div class="bullet-point">No standardized validation process across cloud providers</div>
+
+                <h3>💼 Business Impact</h3>
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <div class="metric-value danger">$XXK/hour</div>
+                        <div class="metric-label">Downtime Cost</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value warning">2-3 Days</div>
+                        <div class="metric-label">Average Deployment Delay</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value info">30%</div>
+                        <div class="metric-label">Time Spent on Manual Testing</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 3: Solution Architecture -->
+        <div class="slide">
+            <div class="slide-number">3/17</div>
+            <div class="slide-header">
+                <h1>Automated Infrastructure Testing Platform</h1>
+                <p class="subtitle">Multi-Cloud Testing Architecture</p>
+            </div>
+            <div class="content">
+                <div class="architecture-box">┌─────────────────────────────────────────────────────────────┐
+│                    GitHub Actions Orchestration                 │
+├─────────────────────────────────────────────────────────────┤
+│  Multi-Cloud Testing Matrix                                     │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────────────────────┐ │
+│  │   AWS   │ │   GCP   │ │  Azure  │ │    Multi-Environment    │ │
+│  │Testing  │ │Testing  │ │Testing  │ │   Dev/Staging/Prod      │ │
+│  └─────────┘ └─────────┘ └─────────┘ └─────────────────────────┘ │
+├─────────────────────────────────────────────────────────────┤
+│                    Terratest Framework                          │
+│  • Infrastructure Validation  • Security Compliance            │
+│  • Performance Testing       • Cost Optimization               │
+└─────────────────────────────────────────────────────────────┘
+         │                                    │
+    ┌─────────┐                          ┌─────────┐
+    │  Email  │                          │  Slack  │
+    │ Alerts  │                          │Notifications│
+    └─────────┘                          └─────────┘</div>
+
+                <h3>🚀 Key Capabilities:</h3>
+                <div class="bullet-point">Parallel testing across multiple cloud providers</div>
+                <div class="bullet-point">Environment-specific validation (Dev, Staging, Production)</div>
+                <div class="bullet-point">Real-time notifications via Slack and Email</div>
+                <div class="bullet-point">Comprehensive security and compliance validation</div>
+            </div>
+        </div>
+
+        <!-- Slide 4: Multi-Cloud Testing Matrix -->
+        <div class="slide">
+            <div class="slide-number">4/17</div>
+            <div class="slide-header">
+                <h1>Multi-Cloud Testing Matrix</h1>
+                <p class="subtitle">Comprehensive Cloud Provider Coverage</p>
+            </div>
+            <div class="content">
+                <div class="risk-table">
+                    <table class="risk-table">
+                        <thead>
+                            <tr>
+                                <th>Cloud Provider</th>
+                                <th>DEV</th>
+                                <th>STAGING</th>
+                                <th>PRODUCTION</th>
+                                <th>Services Covered</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>AWS</strong></td>
+                                <td><span class="success">✓</span></td>
+                                <td><span class="success">✓</span></td>
+                                <td><span class="success">✓</span></td>
+                                <td>EKS, EC2, RDS, S3, Lambda</td>
+                            </tr>
+                            <tr>
+                                <td><strong>GCP</strong></td>
+                                <td><span class="success">✓</span></td>
+                                <td><span class="success">✓</span></td>
+                                <td><span class="success">✓</span></td>
+                                <td>GKE, Compute Engine, Cloud SQL</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Azure</strong></td>
+                                <td><span class="success">✓</span></td>
+                                <td><span class="success">✓</span></td>
+                                <td><span class="success">✓</span></td>
+                                <td>AKS, VMs, Cosmos DB, Storage</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3>🕒 Testing Stages Pipeline:</h3>
+                <div class="timeline">
+                    <div class="timeline-item">
+                        <h4>Syntax Validation (30 seconds)</h4>
+                        <p>Terraform syntax checking and linting</p>
+                    </div>
+                    <div class="timeline-item">
+                        <h4>Security Scanning (2 minutes)</h4>
+                        <p>Checkov, tfsec, and compliance validation</p>
+                    </div>
+                    <div class="timeline-item">
+                        <h4>Infrastructure Deployment (5-15 minutes)</h4>
+                        <p>Multi-cloud resource provisioning</p>
+                    </div>
+                    <div class="timeline-item">
+                        <h4>Functional Testing (10-20 minutes)</h4>
+                        <p>Service connectivity and performance validation</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 5: ROI Analysis -->
+        <div class="slide">
+            <div class="slide-number">5/17</div>
+            <div class="slide-header">
+                <h1>Financial Impact & ROI Analysis</h1>
+                <p class="subtitle">Compelling Business Case for Investment</p>
+            </div>
+            <div class="content">
+                <div class="cost-breakdown">
+                    <div class="cost-section">
+                        <h3>💰 Annual Cost Savings</h3>
+                        <div class="bullet-point">Reduced manual testing: <span class="success">$182K</span></div>
+                        <div class="bullet-point">Prevented outages: <span class="success">$200K</span></div>
+                        <div class="bullet-point">Infrastructure optimization: <span class="success">$500K</span></div>
+                        <div class="bullet-point">Faster time-to-market: <span class="success">$300K</span></div>
+                        <div class="bullet-point">Compliance efficiency: <span class="success">$100K</span></div>
+                        <div style="border-top: 2px solid #28a745; margin-top: 15px; padding-top: 10px;">
+                            <strong>Total Annual Savings: <span class="highlight">$1,282K</span></strong>
+                        </div>
+                    </div>
+                    
+                    <div class="cost-section" style="border-left-color: #dc3545;">
+                        <h3>💸 Initial Investment</h3>
+                        <div class="bullet-point">Personnel (3 months): <span class="danger">$350K</span></div>
+                        <div class="bullet-point">Technology & Infrastructure: <span class="danger">$30K</span></div>
+                        <div class="bullet-point">Training & Certification: <span class="danger">$45K</span></div>
+                        <div style="border-top: 2px solid #dc3545; margin-top: 15px; padding-top: 10px;">
+                            <strong>Total Investment: <span class="highlight">$425K</span></strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <div class="metric-value success">202%</div>
+                        <div class="metric-label">ROI in First Year</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value info">4 Months</div>
+                        <div class="metric-label">Payback Period</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">$3.4M</div>
+                        <div class="metric-label">3-Year Total Benefit</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 6: Success Metrics -->
+        <div class="slide">
+            <div class="slide-number">6/17</div>
+            <div class="slide-header">
+                <h1>Success Metrics & KPIs</h1>
+                <p class="subtitle">Measurable Business Impact</p>
+            </div>
+            <div class="content">
+                <h3>📈 Reliability Improvements</h3>
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <div class="metric-value">99.5% → 99.9%</div>
+                        <div class="metric-label">Infrastructure Uptime (+0.4%)</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">4hrs → 30min</div>
+                        <div class="metric-label">Mean Time to Recovery (-87.5%)</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">15% → 2%</div>
+                        <div class="metric-label">Failed Deployments (-86.7%)</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">3/mo → 0/mo</div>
+                        <div class="metric-label">Security Incidents (-100%)</div>
+                    </div>
+                </div>
+
+                <h3>⚡ Operational Efficiency</h3>
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <div class="metric-value">40hrs → 5hrs</div>
+                        <div class="metric-label">Manual Testing Time (-87.5%)</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">2/wk → 10/wk</div>
+                        <div class="metric-label">Deployment Frequency (+400%)</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">3 days → 4 hours</div>
+                        <div class="metric-label">Time to Production (-95%)</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value success">+30%</div>
+                        <div class="metric-label">Engineering Velocity</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 7: Implementation Roadmap -->
+        <div class="slide">
+            <div class="slide-number">7/17</div>
+            <div class="slide-header">
+                <h1>3-Month Implementation Roadmap</h1>
+                <p class="subtitle">Phased Approach to Minimize Risk</p>
+            </div>
+            <div class="content">
+                <h3>📅 Phase 1: Foundation (Month 1)</h3>
+                <div class="timeline">
+                    <div class="timeline-item">
+                        <h4>Week 1-2: Setup & Basic Testing</h4>
+                        <div class="bullet-point">GitHub Actions workflows implementation</div>
+                        <div class="bullet-point">Single cloud provider (current primary) integration</div>
+                        <div class="bullet-point">Basic infrastructure tests (networking, compute)</div>
+                    </div>
+                    <div class="timeline-item">
+                        <h4>Week 3-4: Security & Compliance</h4>
+                        <div class="bullet-point">Security scanning integration (Checkov, tfsec)</div>
+                        <div class="bullet-point">Compliance validation frameworks</div>
+                        <div class="bullet-point">Initial notification system (Slack/Email)</div>
+                    </div>
+                </div>
+
+                <h3>🚀 Phase 2: Multi-Cloud Expansion (Month 2)</h3>
+                <div class="timeline">
+                    <div class="timeline-item">
+                        <h4>Week 5-8: Full Multi-Cloud Integration</h4>
+                        <div class="bullet-point">AWS, GCP, Azure testing frameworks</div>
+                        <div class="bullet-point">Environment scaling (Dev, Staging, Production)</div>
+                        <div class="bullet-point">Parallel testing optimization</div>
+                    </div>
+                </div>
+
+                <h3>⭐ Phase 3: Advanced Features (Month 3)</h3>
+                <div class="timeline">
+                    <div class="timeline-item">
+                        <h4>Week 9-12: Enterprise Features</h4>
+                        <div class="bullet-point">Performance testing and cost optimization</div>
+                        <div class="bullet-point">Advanced reporting and analytics</div>
+                        <div class="bullet-point">Team training and documentation</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 8: Risk Assessment -->
+        <div class="slide">
+            <div class="slide-number">8/17</div>
+            <div class="slide-header">
+                <h1>Risk Assessment & Mitigation</h1>
+                <p class="subtitle">Proactive Risk Management Strategy</p>
+            </div>
+            <div class="content">
+                <table class="risk-table">
+                    <thead>
+                        <tr>
+                            <th>Risk Category</th>
+                            <th>Potential Impact</th>
+                            <th>Mitigation Strategy</th>
+                            <th>Priority</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Technical Risks</strong></td>
+                            <td>False positives in automated tests</td>
+                            <td>Comprehensive test validation, manual override capabilities</td>
+                            <td><span class="warning">Medium</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Cloud API Changes</strong></td>
+                            <td>Test framework compatibility issues</td>
+                            <td>Multi-provider abstractions, regular dependency updates</td>
+                            <td><span class="info">Low</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Resource Costs</strong></td>
+                            <td>Unexpected cloud testing expenses</td>
+                            <td>Auto-cleanup policies, resource budget limits</td>
+                            <td><span class="success">Low</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Team Adoption</strong></td>
+                            <td>Resistance to new processes</td>
+                            <td>Comprehensive training, gradual rollout, success showcases</td>
+                            <td><span class="danger">High</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Integration</strong></td>
+                            <td>Compatibility with existing CI/CD</td>
+                            <td>API-first approach, standard interfaces, pilot programs</td>
+                            <td><span class="warning">Medium</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Security/Compliance</strong></td>
+                            <td>Audit and regulatory concerns</td>
+                            <td>Security-first design, audit trails, compliance validation</td>
+                            <td><span class="danger">High</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Slide 9: Resource Requirements -->
+        <div class="slide">
+            <div class="slide-number">9/17</div>
+            <div class="slide-header">
+                <h1>Resource Requirements</h1>
+                <p class="subtitle">Investment Breakdown for 3-Month Implementation</p>
+            </div>
+            <div class="content">
+                <div class="cost-breakdown">
+                    <div class="cost-section">
+                        <h3>👥 Personnel (3 months)</h3>
+                        <div class="bullet-point">DevOps Engineers: 2 FTE × 3 months = <span class="info">$180K</span></div>
+                        <div class="bullet-point">Cloud Architects: 1 FTE × 2 months = <span class="info">$80K</span></div>
+                        <div class="bullet-point">QA Engineers: 1 FTE × 3 months = <span class="info">$60K</span></div>
+                        <div class="bullet-point">Project Management: 0.5 FTE × 3 months = <span class="info">$30K</span></div>
+                        <div style="border-top: 2px solid #28a745; margin-top: 15px; padding-top: 10px;">
+                            <strong>Total Personnel: <span class="highlight">$350K</span></strong>
+                        </div>
+                    </div>
+                    
+                    <div class="cost-section">
+                        <h3>🛠️ Technology & Infrastructure</h3>
+                        <div class="bullet-point">GitHub Actions compute: <span class="info">$2K/month</span></div>
+                        <div class="bullet-point">Cloud testing resources: <span class="info">$5K/month</span></div>
+                        <div class="bullet-point">Monitoring & alerting tools: <span class="info">$1K/month</span></div>
+                        <div class="bullet-point">Security scanning tools: <span class="info">$2K/month</span></div>
+                        <div style="border-top: 2px solid #28a745; margin-top: 15px; padding-top: 10px;">
+                            <strong>Total Technology: <span class="highlight">$30K</span> (3 months)</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cost-section">
+                    <h3>🎓 Training & Certification</h3>
+                    <div class="bullet-point">Team training programs: <span class="info">$20K</span></div>
+                    <div class="bullet-point">Cloud certifications: <span class="info">$15K</span></div>
+                    <div class="bullet-point">Conference attendance: <span class="info">$10K</span></div>
+                    <div style="border-top: 2px solid #28a745; margin-top: 15px; padding-top: 10px;">
+                        <strong>Total Training: <span class="highlight">$45K</span></strong>
+                    </div>
+                </div>
+
+                <div class="metric

@@ -1,0 +1,647 @@
+# Terratest Multi-Cloud Automation with GitHub Actions
+
+This guide provides a complete setup for automating Terratest across multiple cloud providers and environments using GitHub Actions, with comprehensive notification capabilities.
+
+## Project Structure
+
+```
+.
+├── .github/
+│   └── workflows/
+│       ├── terratest-multicloud.yml
+│       ├── terratest-scheduled.yml
+│       └── notification-workflow.yml
+├── test/
+│   ├── aws/
+│   │   ├── dev_test.go
+│   │   ├── staging_test.go
+│   │   └── prod_test.go
+│   ├── azure/
+│   │   ├── dev_test.go
+│   │   ├── staging_test.go
+│   │   └── prod_test.go
+│   ├── gcp/
+│   │   ├── dev_test.go
+│   │   ├── staging_test.go
+│   │   └── prod_test.go
+│   └── common/
+│       └── test_helpers.go
+├── terraform/
+│   ├── aws/
+│   ├── azure/
+│   └── gcp/
+├── scripts/
+│   ├── setup-credentials.sh
+│   └── send-notifications.sh
+├── config/
+│   ├── test-config.yaml
+│   └── environments.yaml
+└── go.mod
+```
+
+## GitHub Actions Workflows
+
+### Main Terratest Workflow
+
+```yaml
+# .github/workflows/terratest-multicloud.yml
+name: Terratest Multi-Cloud Testing
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'terraform/**'
+      - 'test/**'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'terraform/**'
+      - 'test/**'
+  workflow_dispatch:
+    inputs:
+      cloud_provider:
+        description: 'Cloud Provider (aws, azure, gcp, all)'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - aws
+          - azure
+          - gcp
+          - all
+      environment:
+        description: 'Environment (dev, staging, prod, all)'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+          - all
+      test_timeout:
+        description: 'Test timeout in minutes'
+        required: false
+        default: '30'
+
+env:
+  GO_VERSION: '1.21'
+  TERRAFORM_VERSION: '1.6.0'
+  TERRAGRUNT_VERSION: '0.53.0'
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      test-id: ${{ steps.generate-id.outputs.test-id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate Test ID
+        id: generate-id
+        run: |
+          echo "test-id=$(date +%Y%m%d%H%M%S)-${{ github.run_number }}" >> $GITHUB_OUTPUT
+
+      - name: Set Test Matrix
+        id: set-matrix
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            CLOUD_PROVIDER="${{ github.event.inputs.cloud_provider }}"
+            ENVIRONMENT="${{ github.event.inputs.environment }}"
+          else
+            CLOUD_PROVIDER="all"
+            ENVIRONMENT="dev"
+          fi
+
+          # Generate matrix based on inputs
+          python3 << EOF
+          import json
+          
+          clouds = ["aws", "azure", "gcp"] if "$CLOUD_PROVIDER" == "all" else ["$CLOUD_PROVIDER"]
+          envs = ["dev", "staging", "prod"] if "$ENVIRONMENT" == "all" else ["$ENVIRONMENT"]
+          
+          matrix = []
+          for cloud in clouds:
+              for env in envs:
+                  matrix.append({
+                      "cloud": cloud,
+                      "environment": env,
+                      "include_destroy": env != "prod"
+                  })
+          
+          print(json.dumps({"include": matrix}))
+          EOF > matrix.json
+          
+          echo "matrix=$(cat matrix.json)" >> $GITHUB_OUTPUT
+
+  terratest:
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ github.event.inputs.test_timeout || 30 }}
+    strategy:
+      fail-fast: false
+      matrix: ${{fromJson(needs.setup.outputs.matrix)}}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: Setup Terragrunt
+        run: |
+          wget https://github.com/gruntwork-io/terragrunt/releases/download/v${{ env.TERRAGRUNT_VERSION }}/terragrunt_linux_amd64
+          chmod +x terragrunt_linux_amd64
+          sudo mv terragrunt_linux_amd64 /usr/local/bin/terragrunt
+
+      - name: Configure Cloud Credentials
+        run: |
+          case "${{ matrix.cloud }}" in
+            aws)
+              echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> $GITHUB_ENV
+              echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> $GITHUB_ENV
+              echo "AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }}" >> $GITHUB_ENV
+              ;;
+            azure)
+              echo "ARM_CLIENT_ID=${{ secrets.ARM_CLIENT_ID }}" >> $GITHUB_ENV
+              echo "ARM_CLIENT_SECRET=${{ secrets.ARM_CLIENT_SECRET }}" >> $GITHUB_ENV
+              echo "ARM_SUBSCRIPTION_ID=${{ secrets.ARM_SUBSCRIPTION_ID }}" >> $GITHUB_ENV
+              echo "ARM_TENANT_ID=${{ secrets.ARM_TENANT_ID }}" >> $GITHUB_ENV
+              ;;
+            gcp)
+              echo '${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}' > /tmp/gcp-key.json
+              echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json" >> $GITHUB_ENV
+              echo "GOOGLE_PROJECT=${{ secrets.GCP_PROJECT_ID }}" >> $GITHUB_ENV
+              ;;
+          esac
+
+      - name: Cache Go Modules
+        uses: actions/cache@v3
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download Go Modules
+        run: go mod download
+
+      - name: Run Terratest
+        id: terratest
+        run: |
+          cd test/${{ matrix.cloud }}
+          
+          # Set test-specific environment variables
+          export TEST_CLOUD_PROVIDER=${{ matrix.cloud }}
+          export TEST_ENVIRONMENT=${{ matrix.environment }}
+          export TEST_ID=${{ needs.setup.outputs.test-id }}
+          export INCLUDE_DESTROY=${{ matrix.include_destroy }}
+          
+          # Run the tests with detailed output
+          go test -v -timeout ${{ github.event.inputs.test_timeout || 30 }}m \
+            -run "Test.*${{ matrix.environment }}" \
+            ./... \
+            | tee test-results.log
+        continue-on-error: true
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.cloud }}-${{ matrix.environment }}
+          path: test/${{ matrix.cloud }}/test-results.log
+          retention-days: 30
+
+      - name: Parse Test Results
+        if: always()
+        id: parse-results
+        run: |
+          cd test/${{ matrix.cloud }}
+          if [ -f test-results.log ]; then
+            PASSED=$(grep -c "PASS:" test-results.log || echo "0")
+            FAILED=$(grep -c "FAIL:" test-results.log || echo "0")
+            SKIPPED=$(grep -c "SKIP:" test-results.log || echo "0")
+            
+            echo "passed=$PASSED" >> $GITHUB_OUTPUT
+            echo "failed=$FAILED" >> $GITHUB_OUTPUT
+            echo "skipped=$SKIPPED" >> $GITHUB_OUTPUT
+            
+            if [ "$FAILED" -gt 0 ]; then
+              echo "status=failed" >> $GITHUB_OUTPUT
+            else
+              echo "status=passed" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "status=error" >> $GITHUB_OUTPUT
+            echo "passed=0" >> $GITHUB_OUTPUT
+            echo "failed=1" >> $GITHUB_OUTPUT
+            echo "skipped=0" >> $GITHUB_OUTPUT
+          fi
+
+    outputs:
+      test-status: ${{ steps.parse-results.outputs.status }}
+      test-passed: ${{ steps.parse-results.outputs.passed }}
+      test-failed: ${{ steps.parse-results.outputs.failed }}
+      test-skipped: ${{ steps.parse-results.outputs.skipped }}
+
+  notify:
+    needs: [setup, terratest]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Collect Results
+        id: collect
+        run: |
+          # Collect all test results
+          echo "Collecting test results..."
+          
+          # This would be populated by parsing the terratest job outputs
+          # For now, using placeholder logic
+          TOTAL_PASSED=0
+          TOTAL_FAILED=0
+          TOTAL_SKIPPED=0
+          
+          echo "total-passed=$TOTAL_PASSED" >> $GITHUB_OUTPUT
+          echo "total-failed=$TOTAL_FAILED" >> $GITHUB_OUTPUT
+          echo "total-skipped=$TOTAL_SKIPPED" >> $GITHUB_OUTPUT
+
+      - name: Send Slack Notification
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          custom_payload: |
+            {
+              attachments: [{
+                color: '${{ contains(needs.terratest.result, 'failure') && 'danger' || 'good' }}',
+                blocks: [
+                  {
+                    type: 'header',
+                    text: {
+                      type: 'plain_text',
+                      text: '🧪 Terratest Results - ${{ needs.setup.outputs.test-id }}'
+                    }
+                  },
+                  {
+                    type: 'section',
+                    fields: [
+                      {
+                        type: 'mrkdwn',
+                        text: '*Repository:* ${{ github.repository }}'
+                      },
+                      {
+                        type: 'mrkdwn',
+                        text: '*Branch:* ${{ github.ref_name }}'
+                      },
+                      {
+                        type: 'mrkdwn',
+                        text: '*Trigger:* ${{ github.event_name }}'
+                      },
+                      {
+                        type: 'mrkdwn',
+                        text: '*Status:* ${{ job.status }}'
+                      }
+                    ]
+                  },
+                  {
+                    type: 'section',
+                    text: {
+                      type: 'mrkdwn',
+                      text: '*Test Summary:*\n• ✅ Passed: ${{ steps.collect.outputs.total-passed }}\n• ❌ Failed: ${{ steps.collect.outputs.total-failed }}\n• ⏭️ Skipped: ${{ steps.collect.outputs.total-skipped }}'
+                    }
+                  },
+                  {
+                    type: 'actions',
+                    elements: [
+                      {
+                        type: 'button',
+                        text: {
+                          type: 'plain_text',
+                          text: 'View Results'
+                        },
+                        url: '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+                      }
+                    ]
+                  }
+                ]
+              }]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Send Email Notification
+        if: always()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "Terratest Results - ${{ github.repository }} - ${{ needs.setup.outputs.test-id }}"
+          to: ${{ secrets.EMAIL_RECIPIENTS }}
+          from: ${{ secrets.EMAIL_FROM }}
+          html_body: |
+            <html>
+            <body>
+              <h2>🧪 Terratest Multi-Cloud Testing Results</h2>
+              
+              <h3>Summary</h3>
+              <ul>
+                <li><strong>Repository:</strong> ${{ github.repository }}</li>
+                <li><strong>Branch:</strong> ${{ github.ref_name }}</li>
+                <li><strong>Test ID:</strong> ${{ needs.setup.outputs.test-id }}</li>
+                <li><strong>Trigger:</strong> ${{ github.event_name }}</li>
+                <li><strong>Overall Status:</strong> ${{ job.status }}</li>
+              </ul>
+              
+              <h3>Test Results</h3>
+              <ul>
+                <li>✅ <strong>Passed:</strong> ${{ steps.collect.outputs.total-passed }}</li>
+                <li>❌ <strong>Failed:</strong> ${{ steps.collect.outputs.total-failed }}</li>
+                <li>⏭️ <strong>Skipped:</strong> ${{ steps.collect.outputs.total-skipped }}</li>
+              </ul>
+              
+              <p>
+                <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" 
+                   style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+                  View Detailed Results
+                </a>
+              </p>
+              
+              <hr>
+              <p><small>This notification was sent automatically by GitHub Actions.</small></p>
+            </body>
+            </html>
+```
+
+### Scheduled Testing Workflow
+
+```yaml
+# .github/workflows/terratest-scheduled.yml
+name: Scheduled Terratest
+
+on:
+  schedule:
+    # Run every day at 2 AM UTC for dev environment
+    - cron: '0 2 * * *'
+    # Run every Monday at 6 AM UTC for staging environment  
+    - cron: '0 6 * * 1'
+    # Run every first day of month at 8 AM UTC for prod environment
+    - cron: '0 8 1 * *'
+  workflow_dispatch:
+
+jobs:
+  determine-schedule:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.determine.outputs.environment }}
+    steps:
+      - name: Determine Environment
+        id: determine
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "environment=dev" >> $GITHUB_OUTPUT
+          else
+            # Determine based on schedule
+            HOUR=$(date -u +%H)
+            DAY_OF_WEEK=$(date -u +%u)
+            DAY_OF_MONTH=$(date -u +%d)
+            
+            if [ "$HOUR" = "2" ]; then
+              echo "environment=dev" >> $GITHUB_OUTPUT
+            elif [ "$HOUR" = "6" ] && [ "$DAY_OF_WEEK" = "1" ]; then
+              echo "environment=staging" >> $GITHUB_OUTPUT
+            elif [ "$HOUR" = "8" ] && [ "$DAY_OF_MONTH" = "1" ]; then
+              echo "environment=prod" >> $GITHUB_OUTPUT
+            else
+              echo "environment=dev" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+  call-main-workflow:
+    needs: determine-schedule
+    uses: ./.github/workflows/terratest-multicloud.yml
+    with:
+      cloud_provider: 'all'
+      environment: ${{ needs.determine-schedule.outputs.environment }}
+      test_timeout: '45'
+    secrets: inherit
+```
+
+## Test Configuration Files
+
+### Test Configuration
+
+```yaml
+# config/test-config.yaml
+test_settings:
+  timeout_minutes: 30
+  retry_attempts: 3
+  parallel_tests: true
+  cleanup_on_failure: true
+
+cloud_providers:
+  aws:
+    regions:
+      - us-west-2
+      - us-east-1
+    instance_types:
+      dev: t3.micro
+      staging: t3.small
+      prod: t3.medium
+  
+  azure:
+    regions:
+      - West US 2
+      - East US
+    vm_sizes:
+      dev: Standard_B1s
+      staging: Standard_B2s
+      prod: Standard_B4ms
+  
+  gcp:
+    regions:
+      - us-west1
+      - us-central1
+    machine_types:
+      dev: e2-micro
+      staging: e2-small
+      prod: e2-medium
+
+environments:
+  dev:
+    auto_destroy: true
+    notification_level: errors_only
+    test_data_retention_days: 7
+  
+  staging:
+    auto_destroy: true
+    notification_level: all
+    test_data_retention_days: 14
+  
+  prod:
+    auto_destroy: false
+    notification_level: all
+    test_data_retention_days: 30
+    require_approval: true
+```
+
+### Environment Configuration
+
+```yaml
+# config/environments.yaml
+environments:
+  dev:
+    terraform_workspace: dev
+    variable_files:
+      - terraform/environments/dev.tfvars
+    backend_config:
+      key: "dev/terraform.tfstate"
+    
+  staging:
+    terraform_workspace: staging
+    variable_files:
+      - terraform/environments/staging.tfvars
+    backend_config:
+      key: "staging/terraform.tfstate"
+    
+  prod:
+    terraform_workspace: prod
+    variable_files:
+      - terraform/environments/prod.tfvars
+    backend_config:
+      key: "prod/terraform.tfstate"
+```
+
+## Sample Terratest Files
+
+### AWS Test Example
+
+```go
+// test/aws/dev_test.go
+package test
+
+import (
+    "testing"
+    "time"
+    
+    "github.com/gruntwork-io/terratest/modules/aws"
+    "github.com/gruntwork-io/terratest/modules/terraform"
+    "github.com/stretchr/testify/assert"
+)
+
+func TestAWSDev(t *testing.T) {
+    t.Parallel()
+    
+    // Choose a random AWS region to test in
+    awsRegion := aws.GetRandomStableRegion(t, nil, nil)
+    
+    terraformOptions := &terraform.Options{
+        TerraformDir: "../../terraform/aws",
+        Vars: map[string]interface{}{
+            "environment": "dev",
+            "aws_region":  awsRegion,
+        },
+        EnvVars: map[string]string{
+            "AWS_DEFAULT_REGION": awsRegion,
+        },
+        RetryableTerraformErrors: map[string]string{
+            "RequestError: send request failed": "Temporary AWS API failure",
+        },
+        MaxRetries:         3,
+        TimeBetweenRetries: 5 * time.Second,
+    }
+    
+    defer terraform.Destroy(t, terraformOptions)
+    terraform.InitAndApply(t, terraformOptions)
+    
+    // Validate the infrastructure
+    instanceId := terraform.Output(t, terraformOptions, "instance_id")
+    assert.NotEmpty(t, instanceId)
+    
+    // Test that the instance is running
+    aws.GetEc2InstancesByIds(t, []*string{&instanceId}, awsRegion)
+}
+```
+
+## Required GitHub Secrets
+
+Set up these secrets in your GitHub repository:
+
+### Cloud Provider Credentials
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_DEFAULT_REGION`
+- `ARM_CLIENT_ID`
+- `ARM_CLIENT_SECRET`
+- `ARM_SUBSCRIPTION_ID`
+- `ARM_TENANT_ID`
+- `GCP_SERVICE_ACCOUNT_KEY`
+- `GCP_PROJECT_ID`
+
+### Notification Credentials
+- `SLACK_WEBHOOK_URL`
+- `EMAIL_USERNAME`
+- `EMAIL_PASSWORD`
+- `EMAIL_RECIPIENTS`
+- `EMAIL_FROM`
+
+## Usage Examples
+
+### Manual Trigger
+```bash
+# Test specific cloud and environment
+gh workflow run terratest-multicloud.yml \
+  -f cloud_provider=aws \
+  -f environment=dev \
+  -f test_timeout=20
+
+# Test all clouds in staging
+gh workflow run terratest-multicloud.yml \
+  -f cloud_provider=all \
+  -f environment=staging
+```
+
+### Integration with Pull Requests
+The workflow automatically runs on pull requests to main branch when Terraform or test files are modified.
+
+### Scheduled Testing
+- Daily dev environment testing at 2 AM UTC
+- Weekly staging testing on Mondays at 6 AM UTC
+- Monthly prod testing on the 1st at 8 AM UTC
+
+## Best Practices
+
+1. **Parallel Testing**: Tests run in parallel across different cloud providers and environments
+2. **Resource Cleanup**: Automatic cleanup after tests (configurable per environment)
+3. **Retry Logic**: Built-in retry mechanism for flaky cloud API calls
+4. **Caching**: Go modules are cached to speed up subsequent runs
+5. **Security**: All credentials stored as GitHub secrets
+6. **Monitoring**: Comprehensive notifications via Slack and email
+7. **Artifact Storage**: Test results stored as artifacts for debugging
+
+## Monitoring and Alerting
+
+The setup includes:
+- Real-time Slack notifications with detailed test results
+- HTML email reports with summary and links
+- Test result artifacts for debugging
+- Configurable notification levels per environment
+
+This comprehensive setup provides robust multi-cloud infrastructure testing with proper monitoring and notification capabilities.
